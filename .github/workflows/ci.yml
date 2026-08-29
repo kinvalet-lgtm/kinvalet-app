@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-type-check:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Run ruff (lint + format check)
+        run: ruff check app/ tests/ && ruff format --check app/ tests/
+
+      - name: Run mypy on contracts (strict)
+        # Contracts are the public API — they must be precisely typed
+        run: mypy --strict app/contracts/
+
+  boundary-enforcement:
+    name: Module Boundary Enforcement
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install uv && uv pip install --system -e ".[dev]"
+
+      - name: Run import-linter
+        # A pull request that couples two modules FAILS the build.
+        # This is non-negotiable — it's the mechanism that makes extraction cheap.
+        run: lint-imports
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install uv && uv pip install --system -e ".[dev]"
+
+      - name: Run unit tests
+        run: pytest tests/unit/ tests/contract/ -v --cov=app --cov-report=xml
+        env:
+          DATABASE_URL: "postgresql+asyncpg://dummy:dummy@localhost/dummy"
+          SUPABASE_JWT_SECRET: "test-secret"
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sandwich_copilot_test
+          POSTGRES_USER: sandwich
+          POSTGRES_PASSWORD: sandwich_dev_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install uv && uv pip install --system -e ".[dev]"
+
+      - name: Run integration tests
+        run: pytest tests/integration/ -v -m integration
+        env:
+          DATABASE_URL: "postgresql+asyncpg://sandwich:sandwich_dev_password@localhost:5432/sandwich_copilot_test"
+          DATABASE_SYNC_URL: "postgresql://sandwich:sandwich_dev_password@localhost:5432/sandwich_copilot_test"
+          SUPABASE_JWT_SECRET: "test-secret"
+          ENVIRONMENT: "development"
+          SECRET_KEY: "test-secret-key"

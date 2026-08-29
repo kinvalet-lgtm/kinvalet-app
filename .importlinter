@@ -1,0 +1,31 @@
+[importlinter]
+root_package = app
+include_external_packages = True
+
+[importlinter:contract:modules-are-independent]
+name = Modules may not import each other
+type = independence
+modules =
+    app.modules.identity
+    app.modules.inbound
+    app.modules.extraction
+    app.modules.operations
+    app.modules.connectors
+    app.modules.skills
+    app.modules.notification
+    app.modules.briefing
+    app.modules.support
+
+[importlinter:contract:layered]
+name = Modules depend on platform and contracts, never the reverse
+type = layers
+layers =
+    app.modules
+    app.contracts
+    app.platform
+
+[importlinter:contract:contracts-are-pure]
+name = Contracts must not import implementations
+type = forbidden
+source_modules = app.contracts
+forbidden_modules = app.modules

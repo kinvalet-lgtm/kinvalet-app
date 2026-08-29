@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+.venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+htmlcov
+.coverage
+*.egg-info
+.git
+.github
+frontend/node_modules
+frontend/.next
+context/

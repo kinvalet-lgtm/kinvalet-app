@@ -1,0 +1,17 @@
+name = "kinvalet-email-worker"
+main = "email-worker.js"
+compatibility_date = "2024-09-01"
+
+# Environment variables — set via `wrangler secret put`
+# KINVALET_API_URL = "https://api-production-57040.up.railway.app"
+# WEBHOOK_SECRET = "your-shared-secret"
+
+# Email routing — catches all emails to kinvalet.com
+[[email_routing.matchers]]
+type = "literal"
+field = "to"
+value = "*"
+
+[[email_routing.actions]]
+type = "worker"
+name = "kinvalet-email-worker"
