@@ -32,10 +32,10 @@ class LLMTask(str, enum.Enum):
 
 # Model routing — Google Gemini (free tier: 15 RPM, 1500 req/day, 1M tokens/day)
 ROUTING: dict[LLMTask, str] = {
-    LLMTask.CLASSIFY: "gemini/gemini-2.0-flash",
-    LLMTask.EXTRACT_TEXT: "gemini/gemini-2.0-flash",
-    LLMTask.EXTRACT_VISION: "gemini/gemini-2.0-flash",
-    LLMTask.BRIEFING: "gemini/gemini-2.0-flash",
+    LLMTask.CLASSIFY: "gemini/gemini-3.6-flash",
+    LLMTask.EXTRACT_TEXT: "gemini/gemini-3.6-flash",
+    LLMTask.EXTRACT_VISION: "gemini/gemini-3.6-flash",
+    LLMTask.BRIEFING: "gemini/gemini-3.6-flash",
 }
 
 
