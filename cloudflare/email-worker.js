@@ -52,13 +52,21 @@ export default {
 
       if (!response.ok) {
         console.error(`KinValet API returned ${response.status}: ${await response.text()}`);
-        // Don't reject — Cloudflare would bounce the email
-        message.setReject("Temporary processing error");
       }
+
+      // Forward a copy to the archive/backup address
+      const forwardTo = env.FORWARD_TO || "kinvalet@kinvalet.com";
+      await message.forward(forwardTo);
+
     } catch (error) {
       console.error("Email processing failed:", error);
-      // Forward to a fallback address on error (optional)
-      // await message.forward("fallback@kinvalet.com");
+      // Still forward on error so no email is lost
+      try {
+        const forwardTo = env.FORWARD_TO || "kinvalet@kinvalet.com";
+        await message.forward(forwardTo);
+      } catch (fwdErr) {
+        console.error("Forward also failed:", fwdErr);
+      }
     }
   },
 };
