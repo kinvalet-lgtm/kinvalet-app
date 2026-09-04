@@ -226,16 +226,21 @@ async def receive_and_queue(session: AsyncSession, parsed: dict, provider: str =
     code = detect_gmail_confirmation(subject, body)
     if code:
         logger.info("gmail_confirmation_code", code=code, household_id=str(household_id))
-        from app.platform.events.outbox import add_event_to_outbox
-        await add_event_to_outbox(session, "GmailConfirmationCode", {
-            "household_id": str(household_id),
-            "member_id": str(member_id),
-            "code": code,
-        })
+        # Store the code in the inbound address record so dashboard + assistant can read it
+        addr_result = await session.execute(
+            select(MemberInboundAddress)
+            .where(MemberInboundAddress.household_id == household_id)
+            .where(MemberInboundAddress.household_member_id == member_id)
+        )
+        addr = addr_result.scalar_one_or_none()
+        if addr:
+            # Store code in the display_label field temporarily (visible in UI)
+            addr.display_label = f"VERIFICATION CODE: {code}"
+
         log = InboundEmailLog(
             household_id=household_id, household_member_id=member_id,
             message_id=message_id, from_email=from_email, to_address=to_email,
-            subject=subject, body_preview="[Gmail forwarding confirmation]", status="processed",
+            subject=subject, body_preview=f"Gmail verification code: {code}", status="processed",
         )
         session.add(log)
         await session.commit()

@@ -256,12 +256,18 @@ async def _extract_and_respond(
             members = await identity_svc.list_adult_members(uuid.UUID(household_id))
             member_context = [{"display_name": m.display_name, "role": m.role, "id": str(m.id)} for m in members]
 
+            # Build additional context: recent emails, verification codes, tasks
+            extra_context = await _build_household_context(session, uuid.UUID(household_id))
+            enriched_text = text
+            if extra_context:
+                enriched_text = f"{text}\n\n[CONTEXT FOR ANSWERING QUESTIONS]\n{extra_context}"
+
             orchestrator = ExtractionOrchestrator(session)
             extraction = await orchestrator.extract(
                 message_id=uuid.UUID(message_id),
                 household_id=uuid.UUID(household_id),
                 member_id=uuid.UUID(member_id),
-                raw_text=text,
+                raw_text=enriched_text,
                 media_type="text",
                 household_members=member_context,
             )
@@ -293,3 +299,85 @@ async def _extract_and_respond(
 
         except Exception as e:
             logger.error("dashboard_extraction_failed", message_id=message_id, error=str(e))
+
+
+async def _build_household_context(session: AsyncSession, household_id: uuid.UUID) -> str:
+    """Build context about the household's recent data for the LLM to answer questions.
+
+    Includes: recent emails, verification codes, active tasks, calendar events.
+    This lets the Assistant answer questions like:
+    - "what's my verification code?"
+    - "what emails did I receive?"
+    - "what's on my plate?"
+    """
+    parts = []
+
+    # Recent emails received
+    try:
+        from app.modules.connectors.email_inbound import InboundEmailLog
+        email_result = await session.execute(
+            select(InboundEmailLog)
+            .where(InboundEmailLog.household_id == household_id)
+            .order_by(InboundEmailLog.received_at.desc())
+            .limit(10)
+        )
+        emails = email_result.scalars().all()
+        if emails:
+            email_lines = []
+            for e in emails:
+                email_lines.append(f"- From: {e.from_email}, Subject: {e.subject}, Status: {e.status}, Preview: {e.body_preview[:100] if e.body_preview else 'N/A'}")
+            parts.append("Recent emails received:\n" + "\n".join(email_lines))
+    except Exception:
+        pass
+
+    # Gmail verification code
+    try:
+        from app.modules.connectors.email_inbound import MemberInboundAddress
+        addr_result = await session.execute(
+            select(MemberInboundAddress)
+            .where(MemberInboundAddress.household_id == household_id)
+            .where(MemberInboundAddress.display_label.startswith("VERIFICATION CODE:"))
+        )
+        addr = addr_result.scalar_one_or_none()
+        if addr:
+            code = addr.display_label.replace("VERIFICATION CODE: ", "")
+            parts.append(f"Pending Gmail forwarding verification code: {code}")
+    except Exception:
+        pass
+
+    # Active tasks
+    try:
+        from app.modules.operations.models import OperationalItem
+        items_result = await session.execute(
+            select(OperationalItem)
+            .where(OperationalItem.household_id == household_id)
+            .where(OperationalItem.is_archived == False)
+            .where(OperationalItem.status.notin_(["cancelled", "declined"]))
+            .order_by(OperationalItem.created_at.desc())
+            .limit(10)
+        )
+        items = items_result.scalars().all()
+        if items:
+            item_lines = []
+            for i in items:
+                time_str = f" at {i.start_at.strftime('%b %d %I:%M %p')}" if i.start_at else ""
+                item_lines.append(f"- {i.title} ({i.category}, {i.status}){time_str}")
+            parts.append("Active tasks:\n" + "\n".join(item_lines))
+    except Exception:
+        pass
+
+    # Forwarding email address
+    try:
+        from app.modules.connectors.email_inbound import MemberInboundAddress as MIA
+        addr_result2 = await session.execute(
+            select(MIA)
+            .where(MIA.household_id == household_id)
+            .where(MIA.is_active == True)
+        )
+        addrs = addr_result2.scalars().all()
+        if addrs:
+            parts.append(f"Family forwarding email address: {addrs[0].address}")
+    except Exception:
+        pass
+
+    return "\n\n".join(parts)

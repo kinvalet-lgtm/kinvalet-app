@@ -102,6 +102,30 @@ async def _process(parsed: dict, provider: str):
             logger.error("email_process_failed", provider=provider, error=str(e))
 
 
+@router.get("/confirmation-code")
+async def get_confirmation_code(
+    current_member=Depends(get_current_member),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Get the pending Gmail forwarding verification code.
+
+    When a user adds their KinValet address as a Gmail forwarding destination,
+    Gmail sends a verification email with a code. We detect it and store it here.
+    The dashboard and assistant can then show it to the user.
+    """
+    from app.modules.connectors.email_inbound import MemberInboundAddress
+    result = await session.execute(
+        select(MemberInboundAddress)
+        .where(MemberInboundAddress.household_id == current_member.household_id)
+        .where(MemberInboundAddress.display_label.startswith("VERIFICATION CODE:"))
+    )
+    addr = result.scalar_one_or_none()
+    if addr:
+        code = addr.display_label.replace("VERIFICATION CODE: ", "")
+        return {"has_code": True, "code": code, "address": addr.address}
+    return {"has_code": False, "code": None}
+
+
 # ── Member address management (authenticated) ─────────────────────────────────
 
 @router.get("/addresses")

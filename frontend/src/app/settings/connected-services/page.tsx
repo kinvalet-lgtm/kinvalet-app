@@ -28,6 +28,7 @@ export default function ConnectedServicesPage() {
   const [showGuide, setShowGuide] = useState<"gmail"|"outlook"|null>(null);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [verificationCode, setVerificationCode] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`${API}/api/v1/connectors/available`, { headers: authHeaders() })
@@ -42,6 +43,9 @@ export default function ConnectedServicesPage() {
       .then(a => { if (Array.isArray(a) && a.length) { setEmailAddr(a[0].address); setEmailCount(a[0].emails_received||0); }}).catch(()=>{});
     fetch(`${API}/api/v1/email/setup-guide`, { headers: authHeaders() }).then(r => r.ok ? r.json() : null).then(setGuide).catch(()=>{});
     fetch(`${API}/api/v1/email/history?limit=5`, { headers: authHeaders() }).then(r => r.ok ? r.json() : []).then(l => setEmailLog(Array.isArray(l)?l:[])).catch(()=>{});
+    // Check for Gmail verification code
+    fetch(`${API}/api/v1/email/confirmation-code`, { headers: authHeaders() }).then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.has_code) setVerificationCode(d.code); }).catch(()=>{});
   }, []);
 
   const loadCalendars = async () => {
@@ -255,6 +259,14 @@ export default function ConnectedServicesPage() {
           {emailAddr ? (
             <>
               <div>
+                {/* Gmail verification code banner */}
+                {verificationCode && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-3">
+                    <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Gmail Verification Code</p>
+                    <p className="text-2xl font-bold text-amber-900 tracking-widest">{verificationCode}</p>
+                    <p className="text-xs text-amber-600 mt-1">Enter this code in Gmail to confirm forwarding. You can also ask the Assistant: "what's my verification code?"</p>
+                  </div>
+                )}
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Your KinValet email address</label>
                 <div className="mt-1.5 flex items-center gap-2">
                   <code className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-mono text-gray-900 select-all">{emailAddr}</code>
