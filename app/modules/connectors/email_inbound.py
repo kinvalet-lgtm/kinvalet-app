@@ -72,15 +72,40 @@ class InboundEmailLog(ConnectorsConfigBase):
 
 
 # Gmail forwarding confirmation detection
-GMAIL_CONFIRM_PATTERN = re.compile(r"Confirmation code:\s*(\d{5,10})", re.IGNORECASE)
-GMAIL_CONFIRM_SUBJECT = re.compile(r"forwarding confirmation", re.IGNORECASE)
+# Gmail uses various formats:
+#   "Confirmation code: 123456789"
+#   "confirm this request... code is 123456789"
+#   "Your confirmation code is 123456789"
+#   Or a clickable link with the code embedded in the URL
+GMAIL_CONFIRM_SUBJECT = re.compile(r"forwarding confirmation|mail forwarding", re.IGNORECASE)
+GMAIL_CONFIRM_PATTERNS = [
+    re.compile(r"(?:confirmation|verify|verification)\s*(?:code|number)[:\s]*(\d{5,12})", re.IGNORECASE),
+    re.compile(r"code\s*(?:is|:)\s*(\d{5,12})", re.IGNORECASE),
+    re.compile(r"(\d{7,12})", re.IGNORECASE),  # fallback: any 7-12 digit number in a confirmation email
+]
 
 
 def detect_gmail_confirmation(subject: str, body: str) -> Optional[str]:
-    if not GMAIL_CONFIRM_SUBJECT.search(subject or ""):
+    """Detect Gmail forwarding confirmation code from subject + body.
+
+    Returns the code if found, None otherwise.
+    Also searches the subject itself (Gmail sometimes puts the code there).
+    """
+    is_confirmation = GMAIL_CONFIRM_SUBJECT.search(subject or "")
+    if not is_confirmation:
         return None
-    match = GMAIL_CONFIRM_PATTERN.search(body or "")
-    return match.group(1) if match else None
+
+    # Search body and subject for the code
+    search_text = f"{subject} {body}"
+    for pattern in GMAIL_CONFIRM_PATTERNS:
+        match = pattern.search(search_text)
+        if match:
+            code = match.group(1)
+            # Filter out obvious non-codes (IP addresses, port numbers, etc.)
+            if len(code) >= 7:
+                return code
+
+    return None
 
 
 async def generate_member_address(
