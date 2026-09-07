@@ -95,7 +95,7 @@ class LiteLLMClient:
             content = ""
             if response.choices and response.choices[0].message:
                 content = response.choices[0].message.content or ""
-                # If tool calls present, serialize them
+                # If tool calls present, serialize them (preserve text_response too)
                 if response.choices[0].message.tool_calls:
                     import json
                     tool_calls = [
@@ -105,7 +105,10 @@ class LiteLLMClient:
                         }
                         for tc in response.choices[0].message.tool_calls
                     ]
-                    content = json.dumps({"tool_calls": tool_calls})
+                    result_json = {"tool_calls": tool_calls}
+                    if content:
+                        result_json["text_response"] = content
+                    content = json.dumps(result_json)
 
             usage = response.usage
             result = LLMResponse(

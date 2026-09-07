@@ -380,4 +380,42 @@ async def _build_household_context(session: AsyncSession, household_id: uuid.UUI
     except Exception:
         pass
 
+    # Today's calendar events
+    try:
+        from app.modules.connectors.config_router import _fetch_events_for_range
+        from datetime import timedelta
+        import pytz
+        from app.modules.identity.api import IdentityService
+        identity_svc = IdentityService(session)
+        tz_name = await identity_svc.household_timezone(household_id)
+        tz = pytz.timezone(tz_name)
+        now = datetime.now(tz)
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=1)
+        events = await _fetch_events_for_range(
+            session, household_id,
+            start.astimezone(timezone.utc), end.astimezone(timezone.utc),
+        )
+        if events:
+            event_lines = []
+            for ev in events:
+                time_str = ""
+                if ev.get("start_at"):
+                    try:
+                        from datetime import datetime as dt
+                        t = dt.fromisoformat(ev["start_at"].replace("Z", "+00:00")).astimezone(tz)
+                        time_str = t.strftime("%I:%M %p")
+                    except Exception:
+                        time_str = ev["start_at"]
+                elif ev.get("all_day"):
+                    time_str = "All day"
+                loc = f" at {ev['location']}" if ev.get("location") else ""
+                cal = f" ({ev.get('calendar_name', '')})" if ev.get("calendar_name") else ""
+                event_lines.append(f"- {time_str}: {ev['title']}{loc}{cal}")
+            parts.append(f"Today's calendar events ({now.strftime('%A, %B %d')}):\n" + "\n".join(event_lines))
+        else:
+            parts.append(f"Today's calendar ({now.strftime('%A, %B %d')}): No events scheduled.")
+    except Exception:
+        pass
+
     return "\n\n".join(parts)
