@@ -47,17 +47,16 @@ async def list_google_calendars(
     """
     target_member_id = member_id or current_member.id
 
-    # Get the connected instance
+    # Get the connected instance (household-level — any member can configure)
     result = await session.execute(
         select(HouseholdConnectorInstance)
         .where(HouseholdConnectorInstance.household_id == current_member.household_id)
         .where(HouseholdConnectorInstance.connector_type_id == "google_calendar")
-        .where(HouseholdConnectorInstance.connected_by_member_id == target_member_id)
         .where(HouseholdConnectorInstance.status == "connected")
     )
     inst = result.scalar_one_or_none()
     if inst is None:
-        raise HTTPException(status_code=404, detail="Google Calendar not connected for this member")
+        raise HTTPException(status_code=404, detail="Google Calendar not connected for this household")
 
     calendars = await _fetch_google_calendars(inst)
 
@@ -94,12 +93,11 @@ async def list_microsoft_calendars(
         select(HouseholdConnectorInstance)
         .where(HouseholdConnectorInstance.household_id == current_member.household_id)
         .where(HouseholdConnectorInstance.connector_type_id == "microsoft_calendar")
-        .where(HouseholdConnectorInstance.connected_by_member_id == target_member_id)
         .where(HouseholdConnectorInstance.status == "connected")
     )
     inst = result.scalar_one_or_none()
     if inst is None:
-        raise HTTPException(status_code=404, detail="Microsoft Calendar not connected for this member")
+        raise HTTPException(status_code=404, detail="Microsoft Calendar not connected for this household")
 
     calendars = await _fetch_microsoft_calendars(inst)
 
@@ -152,16 +150,15 @@ async def save_calendar_selection(
     if not body.sync_calendar_ids:
         raise HTTPException(status_code=422, detail="Select at least one calendar to sync")
 
-    # Get instance
+    # Get instance (household-level)
     result = await session.execute(
         select(HouseholdConnectorInstance)
         .where(HouseholdConnectorInstance.household_id == current_member.household_id)
         .where(HouseholdConnectorInstance.connector_type_id == body.connector_type_id)
-        .where(HouseholdConnectorInstance.connected_by_member_id == target_member_id)
     )
     inst = result.scalar_one_or_none()
     if inst is None:
-        raise HTTPException(status_code=404, detail="Connector not found for this member")
+        raise HTTPException(status_code=404, detail="Connector not found for this household")
 
     # Upsert config
     existing = await session.execute(

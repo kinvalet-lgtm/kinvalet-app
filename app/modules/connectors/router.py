@@ -214,7 +214,6 @@ async def disconnect_connector(
         select(HouseholdConnectorInstance)
         .where(HouseholdConnectorInstance.household_id == current_member.household_id)
         .where(HouseholdConnectorInstance.connector_type_id == connector_type_id)
-        .where(HouseholdConnectorInstance.connected_by_member_id == current_member.id)
     )
     inst = result.scalar_one_or_none()
     if not inst:

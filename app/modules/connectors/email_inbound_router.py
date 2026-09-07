@@ -220,14 +220,15 @@ async def setup_guide(
                     "Open Gmail → Settings (gear icon) → See all settings",
                     "Go to 'Forwarding and POP/IMAP' tab",
                     f"Click 'Add a forwarding address' → enter: {address}",
-                    "Gmail sends a confirmation code — it appears in your KinValet dashboard automatically",
-                    "Enter the code in Gmail to verify",
-                    "Now create a filter: click the search filter icon (▼) in Gmail search bar",
+                    "Gmail sends a VERIFICATION EMAIL to that address (not a code you type)",
+                    f"The verification email arrives at KinValet — check your email history below or ask the Assistant: 'show my verification email'",
+                    "Click the verification link in that email, OR find the confirmation code and enter it in Gmail",
+                    "Once verified, create a filter: click the search filter icon (▼) in Gmail search bar",
                     "Set criteria (e.g. From: *@school.edu, or Has label: Healthcare)",
                     f"Click 'Create filter' → check 'Forward it to: {address}'",
                     "Done — matching emails arrive in KinValet within seconds",
                 ],
-                "note": "Only emails matching your filter are forwarded. KinValet never accesses your Gmail directly.",
+                "note": "Gmail sends a verification email (not a code) to your KinValet address. You can read it in your email history below, or ask the KinValet Assistant to show it to you.",
             },
             "outlook": {
                 "title": "Outlook — set up a forwarding rule",
@@ -262,15 +263,19 @@ async def email_history(
         .order_by(InboundEmailLog.received_at.desc())
         .limit(limit)
     )
+    emails = result.scalars().all()
     return [
         {
             "id": str(e.id),
             "from": e.from_email,
             "subject": e.subject,
-            "preview": e.body_preview[:100] if e.body_preview else None,
+            # Show full body for verification emails so users can click the link
+            "preview": e.body_preview if (e.body_preview and "forwarding" in (e.subject or "").lower()) else (e.body_preview[:100] if e.body_preview else None),
+            "full_body": e.body_preview if "forwarding" in (e.subject or "").lower() else None,
+            "is_verification": "forwarding" in (e.subject or "").lower(),
             "status": e.status,
             "received_at": e.received_at.isoformat(),
             "member_id": str(e.household_member_id) if e.household_member_id else None,
         }
-        for e in result.scalars().all()
+        for e in emails
     ]

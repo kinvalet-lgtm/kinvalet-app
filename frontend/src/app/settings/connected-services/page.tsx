@@ -306,13 +306,31 @@ export default function ConnectedServicesPage() {
                 <div className="pt-2 border-t border-gray-100">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recent emails received</p>
                   {emailLog.map((e: any) => (
-                    <div key={e.id} className="flex items-start gap-2 text-xs bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 mb-1.5">
-                      <span className={`shrink-0 mt-0.5 ${e.status === "extracted" ? "text-green-500" : "text-gray-400"}`}>{e.status === "extracted" ? "✓" : "⟳"}</span>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-gray-800 truncate">{e.subject || "(no subject)"}</p>
-                        <p className="text-gray-400 truncate">from {e.from} · {new Date(e.received_at).toLocaleString()}</p>
+                    e.is_verification ? (
+                      <div key={e.id} className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-2">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-amber-600 text-sm">⚠</span>
+                          <p className="text-sm font-semibold text-amber-800">{e.subject || "Gmail Forwarding Verification"}</p>
+                        </div>
+                        <p className="text-xs text-amber-600 mb-2">from {e.from} · {new Date(e.received_at).toLocaleString()}</p>
+                        {e.full_body && (
+                          <div className="bg-white border border-amber-100 rounded-lg p-3 text-xs text-gray-700 whitespace-pre-wrap break-words max-h-48 overflow-y-auto"
+                            dangerouslySetInnerHTML={{ __html: e.full_body.replace(/(https?:\/\/[^\s<>"]+)/g, '<a href="$1" target="_blank" rel="noopener" class="text-indigo-600 underline break-all">$1</a>') }} />
+                        )}
+                        {!e.full_body && e.preview && (
+                          <p className="text-xs text-gray-600">{e.preview}</p>
+                        )}
+                        <p className="text-[11px] text-amber-600 mt-2">Click the verification link above to confirm Gmail forwarding, or copy the code into Gmail.</p>
                       </div>
-                    </div>
+                    ) : (
+                      <div key={e.id} className="flex items-start gap-2 text-xs bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 mb-1.5">
+                        <span className={`shrink-0 mt-0.5 ${e.status === "extracted" ? "text-green-500" : "text-gray-400"}`}>{e.status === "extracted" ? "✓" : "⟳"}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-gray-800 truncate">{e.subject || "(no subject)"}</p>
+                          <p className="text-gray-400 truncate">from {e.from} · {new Date(e.received_at).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    )
                   ))}
                 </div>
               )}
