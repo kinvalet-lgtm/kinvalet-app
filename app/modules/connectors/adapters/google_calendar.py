@@ -277,14 +277,36 @@ class GoogleCalendarAdapter:
             token_json = secret_ref
             creds = Credentials.from_authorized_user_info(json.loads(token_json), GOOGLE_SCOPES)
 
-            # Refresh if expired
+            # Refresh if expired and persist the new access token back to DB
             if not creds.valid and creds.refresh_token:
                 from google.auth.transport.requests import Request
                 creds.refresh(Request())
+                # Save refreshed token to DB so we don't re-refresh every call
+                await self._persist_refreshed_token(instance, creds)
             return creds
         except Exception as e:
             logger.error("google_credentials_load_failed", error=str(e))
             return None
+
+    @staticmethod
+    async def _persist_refreshed_token(instance: ConnectorInstanceDTO, creds):
+        """Write the refreshed access token back to the DB."""
+        try:
+            from sqlalchemy import update
+            from app.modules.connectors.models import HouseholdConnectorInstance
+            from app.platform.db import AsyncSessionFactory
+
+            new_token_json = creds.to_json()
+            async with AsyncSessionFactory() as session:
+                await session.execute(
+                    update(HouseholdConnectorInstance)
+                    .where(HouseholdConnectorInstance.id == instance.id)
+                    .values(secret_ref=new_token_json)
+                )
+                await session.commit()
+            logger.info("google_token_refreshed", account=instance.external_account_ref)
+        except Exception as e:
+            logger.warning("google_token_persist_failed", error=str(e))
 
     @staticmethod
     async def _store_secret(key: str, value: str) -> str:
