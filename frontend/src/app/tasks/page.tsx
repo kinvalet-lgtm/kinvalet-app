@@ -42,6 +42,11 @@ export default function TasksPage() {
     return () => clearInterval(interval);
   }, []);
 
+  const handleConfirm = async (id: string, confirmed: boolean) => {
+    await api.operations.confirmItem(id, confirmed);
+    fetchItems();
+  };
+
   const handleComplete = async (id: string) => {
     await api.operations.completeItem(id);
     fetchItems();
@@ -65,16 +70,17 @@ export default function TasksPage() {
       </div>
 
       {tab === "mine" ? (
-        <MyTasksView items={items} onComplete={handleComplete} />
+        <MyTasksView items={items} onConfirm={handleConfirm} onComplete={handleComplete} />
       ) : (
-        <FamilyBoardView items={items} onComplete={handleComplete} onArchive={handleArchive} />
+        <FamilyBoardView items={items} onConfirm={handleConfirm} onComplete={handleComplete} onArchive={handleArchive} />
       )}
     </div>
   );
 }
 
-function MyTasksView({ items, onComplete }: {
+function MyTasksView({ items, onConfirm, onComplete }: {
   items: OperationalItem[];
+  onConfirm: (id: string, confirmed: boolean) => void;
   onComplete: (id: string) => void;
 }) {
   const assigned = items.filter(i => i.status === "confirmed" && !i.is_archived);
@@ -84,22 +90,23 @@ function MyTasksView({ items, onComplete }: {
     <div className="space-y-4">
       {pending.length > 0 && (
         <Section title="Awaiting your response">
-          {pending.map(item => <TaskCard key={item.id} item={item} onComplete={onComplete} showActions />)}
+          {pending.map(item => <TaskCard key={item.id} item={item} onConfirm={onConfirm} onComplete={onComplete} showActions />)}
         </Section>
       )}
       <Section title="Assigned to you">
         {assigned.length === 0 ? (
           <p className="text-sm text-gray-500 py-2">Nothing on your plate right now.</p>
         ) : (
-          assigned.map(item => <TaskCard key={item.id} item={item} onComplete={onComplete} showActions />)
+          assigned.map(item => <TaskCard key={item.id} item={item} onConfirm={onConfirm} onComplete={onComplete} showActions />)
         )}
       </Section>
     </div>
   );
 }
 
-function FamilyBoardView({ items, onComplete, onArchive }: {
+function FamilyBoardView({ items, onConfirm, onComplete, onArchive }: {
   items: OperationalItem[];
+  onConfirm: (id: string, confirmed: boolean) => void;
   onComplete: (id: string) => void;
   onArchive: (id: string) => void;
 }) {
@@ -110,7 +117,7 @@ function FamilyBoardView({ items, onComplete, onArchive }: {
           <h3 className="text-xs font-semibold text-gray-500 uppercase mb-3">{col.label}</h3>
           <div className="space-y-2">
             {items.filter(i => i.status === col.key && !i.is_archived).map(item => (
-              <KanbanCard key={item.id} item={item} onComplete={onComplete} />
+              <KanbanCard key={item.id} item={item} onConfirm={onConfirm} onComplete={onComplete} />
             ))}
           </div>
         </div>
@@ -119,8 +126,9 @@ function FamilyBoardView({ items, onComplete, onArchive }: {
   );
 }
 
-function TaskCard({ item, onComplete, showActions }: {
+function TaskCard({ item, onConfirm, onComplete, showActions }: {
   item: OperationalItem;
+  onConfirm: (id: string, confirmed: boolean) => void;
   onComplete: (id: string) => void;
   showActions?: boolean;
 }) {
@@ -129,35 +137,55 @@ function TaskCard({ item, onComplete, showActions }: {
   return (
     <div className={`border rounded-lg p-3 ${item.priority === "critical" ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"}`}>
       <div className="flex items-start justify-between gap-2">
-        <div>
+        <div className="flex-1 min-w-0">
           {item.priority === "critical" && (
             <span className="text-xs text-red-600 font-semibold mr-1">URGENT</span>
           )}
           <p className="text-sm font-medium text-gray-900">{item.title}</p>
           {time && <p className="text-xs text-gray-500 mt-0.5">{time}</p>}
           {item.location && <p className="text-xs text-gray-500">{item.location}</p>}
-          {item.cost_cents && (
+          {item.cost_cents != null && item.cost_cents > 0 && (
             <p className="text-xs text-gray-600 mt-1">${(item.cost_cents / 100).toFixed(2)}</p>
           )}
         </div>
-        {showActions && item.status === "confirmed" && (
-          <button
-            onClick={() => onComplete(item.id)}
-            className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200 whitespace-nowrap"
-          >
-            ✓ Done
-          </button>
-        )}
-      </div>
-      <div className="mt-2">
         <StatusBadge status={item.status} />
       </div>
+
+      {showActions && (
+        <div className="mt-2.5 flex gap-2">
+          {(item.status === "pending_confirmation" || item.status === "pending_approval") && (
+            <>
+              <button
+                onClick={() => onConfirm(item.id, true)}
+                className="flex-1 text-xs font-semibold bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                {item.status === "pending_approval" ? "Approve" : "Confirm"}
+              </button>
+              <button
+                onClick={() => onConfirm(item.id, false)}
+                className="text-xs font-medium text-gray-500 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Decline
+              </button>
+            </>
+          )}
+          {item.status === "confirmed" && (
+            <button
+              onClick={() => onComplete(item.id)}
+              className="flex-1 text-xs font-semibold bg-green-100 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-200 transition-colors"
+            >
+              Mark done
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function KanbanCard({ item, onComplete }: {
+function KanbanCard({ item, onConfirm, onComplete }: {
   item: OperationalItem;
+  onConfirm: (id: string, confirmed: boolean) => void;
   onComplete: (id: string) => void;
 }) {
   return (
@@ -166,12 +194,23 @@ function KanbanCard({ item, onComplete }: {
       {item.start_at && (
         <p className="text-gray-500 mt-1">{format(parseISO(item.start_at), "MMM d h:mm a")}</p>
       )}
+      {(item.status === "pending_confirmation" || item.status === "pending_approval") && (
+        <div className="mt-1.5 flex gap-1">
+          <button onClick={() => onConfirm(item.id, true)}
+            className="text-indigo-600 hover:text-indigo-700 font-semibold">
+            {item.status === "pending_approval" ? "Approve" : "Confirm"}
+          </button>
+          <span className="text-gray-300">|</span>
+          <button onClick={() => onConfirm(item.id, false)}
+            className="text-gray-400 hover:text-red-500">
+            Decline
+          </button>
+        </div>
+      )}
       {item.status === "confirmed" && (
-        <button
-          onClick={() => onComplete(item.id)}
-          className="mt-1 text-green-600 hover:text-green-700"
-        >
-          ✓ Mark done
+        <button onClick={() => onComplete(item.id)}
+          className="mt-1 text-green-600 hover:text-green-700 font-semibold">
+          Mark done
         </button>
       )}
     </div>
